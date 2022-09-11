@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "habbo-archive",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

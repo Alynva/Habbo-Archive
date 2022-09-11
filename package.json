@@ -1,0 +1,23 @@
+{
+  "name": "habbo-archive",
+  "version": "1.0.0",
+  "description": "Wayback Machine Habbo Archive",
+  "main": "index.js",
+  "scripts": {
+    "login": "firebase login"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alynva/Habbo-Archive.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Alynva/Habbo-Archive/issues"
+  },
+  "homepage": "https://github.com/Alynva/Habbo-Archive#readme",
+  "devDependencies": {
+    "firebase-tools": "^11.8.1"
+  }
+}
