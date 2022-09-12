@@ -5,13 +5,16 @@ export default class WebsiteConnection extends EventEmitter {
 	/** @type {WebSocketServer} */
 	#websiteExtensionServer
 
+	/** @type {WebSocket} */
+	#socket
+
 	get port() {
 		return 7247
 	}
 
 	run() {
 		this.#websiteExtensionServer = new WebSocketServer({ port: this.port }, () => {
-			console.log("Server started at", this.#websiteExtensionServer.address())
+			this.emit("init", this.#websiteExtensionServer.address().port)
 		})
 		this.#websiteExtensionServer.on('error', (err) => {
 			console.error(err)
@@ -26,7 +29,13 @@ export default class WebsiteConnection extends EventEmitter {
 		socket.on('message', this.#onMessage)
 		socket.on('close', this.#onClose.bind(this))
 
-		socket.send('something')
+		socket.send(JSON.stringify({
+			type: "HELLO"
+		}))
+
+		this.disconnect()
+
+		this.#socket = socket
 
 		this.emit("connectionChange", true)
 	}
@@ -35,8 +44,33 @@ export default class WebsiteConnection extends EventEmitter {
 		this.emit('connectionChange', false)
 	}
 
-	/** @param {WebSocket.RawData} data */
-	#onMessage(data) {
-		console.log('received: %s', data)
+	/** @param {WebSocket.RawData} message */
+	#onMessage(message) {
+		const parsedMessage = parseMessage(message)
+
+		switch (parsedMessage.type) {
+			case "HELLO":
+				console.log("Friendly handshake")
+				break;
+		}
+	}
+
+	disconnect() {
+		if (this.#socket instanceof WebSocket) this.#socket.close()
+	}
+
+	async notifyRoom(roomData) {
+		this.#socket.send(JSON.stringify({
+			type: "ROOM_VISITED",
+			data: roomData,
+		}))
+	}
+}
+
+function parseMessage(message) {
+	try {
+		return JSON.parse(message)
+	} catch {
+		return "[Invalid message]"
 	}
 }

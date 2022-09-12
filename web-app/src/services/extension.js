@@ -26,7 +26,9 @@ function connect(port = 7247) {
 
 	socket.addEventListener('open', () => {
 		document.querySelector("#status").innerText = "Connected"
-		socket.send('Hello Server!')
+		socket.send(JSON.stringify({
+			type: "HELLO"
+		}))
 	})
 
 	socket.addEventListener("close", () => {
@@ -42,7 +44,22 @@ function disconnect() {
 	if (socket instanceof WebSocket) socket.close()
 }
 
+/** @param {String} message */
 function onMessage(message) {
 	document.querySelector("#status").innerText += '\n' + message
+	const parsedMessage = parseMessage(message)
+	
+	switch (parsedMessage.type) {
+		case "HELLO":
+			console.log("Friendly handshake")
+			break;
+	}
+}
 
+function parseMessage(message) {
+	try {
+		return JSON.parse(message)
+	} catch {
+		return "[Invalid message]"
+	}
 }
