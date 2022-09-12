@@ -4,6 +4,7 @@
   "description": "Wayback Machine Habbo Archive",
   "main": "index.js",
   "scripts": {
+    "postinstall": "cd server && npm ci && cd ../web-app && npm ci",
     "login": "firebase login"
   },
   "repository": {
