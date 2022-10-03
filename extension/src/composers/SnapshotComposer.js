@@ -1,5 +1,11 @@
 import { HPacket } from "gnode-api";
 
+/**
+ * @typedef SnapshotSummary
+ * @property {number} timestamp
+ * @property {String} host
+ */
+
 export default class SnapshotComposer {
 	/** @type {HPacket} */
 	in_GetGuestRoomResult;
@@ -13,10 +19,12 @@ export default class SnapshotComposer {
 
 	/** @type {HPacket} */
 	#response
-	#completed = false
+
+	/** @type {number} */
+	#timestamp
 
 	/**
-	 * @param {String} host 
+	 * @param {String} host
 	 */
 	constructor(host) {
 		this.#host = host
@@ -30,19 +38,34 @@ export default class SnapshotComposer {
 		return this.#response
 	}
 
-	get completed() {
-		return this.#completed
+	get ready() {
+		return !!(this.in_GetGuestRoomResult && this.in_Objects && this.in_Items)
+	}
+
+	/**
+	 * @returns {SnapshotSummary}
+	 */
+	get summary() {
+		if (!this.ready)
+			throw new Error("Please, set all packets before using the summary.")
+
+		const timestamp = this.#timestamp || Date.now()
+		this.#timestamp = timestamp
+
+		return {
+			timestamp,
+			host: this.#host,
+			// TODO: parse packets and extract important summary, eg visitor info (name, id, figure), room info (name, owner, ids), furni info (floor, wall, teleports), ...
+		}
 	}
 
 	/**
 	 * @param {HPacket} response
-	 * @param {HPacket} packetRoom
-	 * @param {HPacket} packetObjects
-	 * @param {HPacket} packetItems
+	 * @param {SnapshotSummary} summary
 	 */
-	#serializeSummary(response, packetRoom, packetObjects, packetItems) {
-		response.appendLong(Date.now())
-		response.appendString(this.#host)
+	#serializeSummary(response, summary) {
+		response.appendLong(summary.timestamp)
+		response.appendString(summary.host)
 
 		// TODO: parse packets and extract important summary (eg room name, owner name, total furni count, teleports count, ...)
 	}
@@ -54,7 +77,7 @@ export default class SnapshotComposer {
 	#serializePacket(response, packet) {
 		const readIndex = packet.readIndex;
 		packet.resetReadIndex()
-		const data = packet.readBytes(packet.getBytesLength - 6)
+		const data = packet.readBytes(packet.getBytesLength() - 6)
 		packet.readIndex = readIndex
 		response.appendBytes(data)
 	}
@@ -67,16 +90,15 @@ export default class SnapshotComposer {
 
 		const response = new HPacket(this.headerId)
 
-		if (!this.in_GetGuestRoomResult || !this.in_Objects || !this.in_Items)
+		if (!this.ready)
 			throw new Error("Please, set all packets before composing.")
 
-		this.#serializeSummary(response, this.in_GetGuestRoomResult, this.in_Objects, this.in_Items)
+		this.#serializeSummary(response, this.summary)
 		this.#serializePacket(response, this.in_GetGuestRoomResult)
 		this.#serializePacket(response, this.in_Objects)
 		this.#serializePacket(response, this.in_Items)
 
 		this.#response = response
-		this.#completed = true
 
 		return this.response
 	}

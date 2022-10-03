@@ -1,3 +1,4 @@
+import { HPacket } from 'gnode-api'
 import { EventEmitter } from 'node:events'
 import WebSocket, { WebSocketServer } from 'ws'
 
@@ -59,10 +60,15 @@ export default class WebsiteConnection extends EventEmitter {
 		if (this.#socket instanceof WebSocket) this.#socket.close()
 	}
 
-	async notifyRoom(roomData) {
+	/**
+	 * @param {import('../composers/SnapshotComposer').SnapshotSummary} summary
+	 * @param {HPacket} roomData
+	 */
+	async notifyRoom(summary, roomData) {
 		this.#socket.send(JSON.stringify({
 			type: "ROOM_VISITED",
-			data: roomData,
+			summary,
+			data: Array.from(roomData.toBytes()),
 		}))
 	}
 }

@@ -1,7 +1,9 @@
+import fs from 'node:fs'
 import { EventEmitter } from 'node:events'
 
 import { Extension, HPacket, HDirection } from 'gnode-api'
-import GetGuestRoomResult from '../parsers/GetGuestRoomResult.js'
+import GetGuestRoomResult from '../parsers/in_GetGuestRoomResult.js'
+import Waiter from '../utils/Waiter.js'
 import SnapshotComposer from '../composers/SnapshotComposer.js'
 
 const extensionInfo = {
@@ -17,9 +19,6 @@ export default class GEarthConnection extends EventEmitter {
 	#habboConnected = false
 	/** @type {String} */
 	#habboHost
-
-	/** @type {Number} */
-	#currentRoom
 
 	/** @type {SnapshotComposer} */
 	#snapshot
@@ -52,37 +51,56 @@ export default class GEarthConnection extends EventEmitter {
 			const packet = hMessage.getPacket()
 			const packetData = new GetGuestRoomResult(packet)
 
-			if (!packetData.enterRoom) return
 
-			const { flatId, roomName, ownerName, description } = packetData
-			this.#currentRoom = flatId
+			if (!packetData.enterRoom) {
+				this.#snapshot = new SnapshotComposer(this.#habboHost)
+				return
+			}
 
-			this.#snapshot = new SnapshotComposer(this.#habboHost)
 			this.#snapshot.in_GetGuestRoomResult = packet
-
-			this.emit("entererRoom", {
-				host: this.#habboHost, roomId: flatId, roomName, ownerName, description,
-			})
+			this.#checkSnapshotReady()
 		})
 
 		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Objects", hMessage => {
 			const packet = hMessage.getPacket()
 
+			// console.log(this)
 			this.#snapshot.in_Objects = packet
+			this.#checkSnapshotReady()
 		})
 
 		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Items", hMessage => {
 			const packet = hMessage.getPacket()
 
 			this.#snapshot.in_Items = packet
+			this.#checkSnapshotReady()
 		})
 
 		this.#ext.run()
 	}
 
+	#checkSnapshotReady() {
+		if (this.#snapshot.ready) {
+			const snapshotPacket = this.#snapshot.response || this.#snapshot.compose()
+			const roomSummary = this.#snapshot.summary
+
+			const snapshotData = {
+				roomSummary,
+				snapshotPacket,
+			}
+
+			fs.writeFileSync(`./snapshots/${roomSummary.timestamp}.json`, JSON.stringify({
+				summary: roomSummary,
+				data: Array.from(snapshotPacket.toBytes()),
+			}))
+
+			this.emit("snapshotReady", snapshotData)
+		}
+	}
+
 	roomNotifiedAlert() {
 		if (!this.#habboConnected) return
 
-		this.#ext.sendToClient(new HPacket("{in:Chat}{i:-1}{s:\"Room ready tos be save at https://habbo-archive.web.app/ !\"}{i:0}{i:30}{i:0}{i:-1}"))
+		this.#ext.sendToClient(new HPacket("{in:Chat}{i:-1}{s:\"Room ready to be save at https://habbo-archive.web.app/ !\"}{i:0}{i:30}{i:0}{i:-1}"))
 	}
 }

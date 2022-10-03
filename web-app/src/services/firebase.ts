@@ -1,5 +1,7 @@
+import fs from 'node:fs'
+
 import { initializeApp } from "firebase/app";
-import { applicationDefault, initializeApp as initializeAdminApp } from 'firebase-admin/app';
+import { applicationDefault, initializeApp as initializeAdminApp, cert, getApp } from 'firebase-admin/app';
 
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -14,13 +16,13 @@ const firebaseConfig = {
   storageBucket: import.meta.env.FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.FIREBASE_MESSAGING_SENDER_ID,
 }
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 
-const adminApp = initializeAdminApp({
-  credential: applicationDefault(),
-  databaseURL: 'https://<DATABASE_NAME>.firebaseio.com'
+const serviceAccount = fs.readFileSync("./firebase-credential.json", "utf-8")
+const adminApp = getApp("[DEFAULT]") || initializeAdminApp({
+  credential: cert(JSON.parse(serviceAccount)),
+  databaseURL: `https://${firebaseConfig.projectId}.firebaseio.com`
 });
 
 export const firestore = getFirestore(app)

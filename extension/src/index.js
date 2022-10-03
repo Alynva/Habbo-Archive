@@ -36,8 +36,12 @@ gEarthConn.on('habboConnection', state => {
 	status.habboConnected = state
 })
 
-gEarthConn.on('entererRoom', roomData => {
-	webConn.notifyRoom(roomData)
+gEarthConn.on('snapshotReady', roomData => {
+	const {
+		roomSummary,
+		snapshotPacket,
+	} = roomData
+	webConn.notifyRoom(roomSummary, snapshotPacket)
 		.then(() => gEarthConn.roomNotifiedAlert())
 		.catch(() => {})
 })
