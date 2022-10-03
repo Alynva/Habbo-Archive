@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 
 import { Extension, HPacket, HDirection } from 'gnode-api'
 import GetGuestRoomResult from '../parsers/GetGuestRoomResult.js'
+import SnapshotComposer from '../composers/SnapshotComposer.js'
 
 const extensionInfo = {
 	name: "Habbo Archive",
@@ -19,6 +20,9 @@ export default class GEarthConnection extends EventEmitter {
 
 	/** @type {Number} */
 	#currentRoom
+
+	/** @type {SnapshotComposer} */
+	#snapshot
 
 	run() {
 		this.#ext = new Extension(extensionInfo)
@@ -47,15 +51,30 @@ export default class GEarthConnection extends EventEmitter {
 		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "GetGuestRoomResult", hMessage => {
 			const packet = hMessage.getPacket()
 			const packetData = new GetGuestRoomResult(packet)
-			
+
 			if (!packetData.enterRoom) return
-			
+
 			const { flatId, roomName, ownerName, description } = packetData
 			this.#currentRoom = flatId
+
+			this.#snapshot = new SnapshotComposer(this.#habboHost)
+			this.#snapshot.in_GetGuestRoomResult = packet
 
 			this.emit("entererRoom", {
 				host: this.#habboHost, roomId: flatId, roomName, ownerName, description,
 			})
+		})
+
+		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Objects", hMessage => {
+			const packet = hMessage.getPacket()
+
+			this.#snapshot.in_Objects = packet
+		})
+
+		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Items", hMessage => {
+			const packet = hMessage.getPacket()
+
+			this.#snapshot.in_Items = packet
 		})
 
 		this.#ext.run()
