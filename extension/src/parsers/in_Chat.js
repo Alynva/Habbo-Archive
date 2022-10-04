@@ -8,12 +8,16 @@ export default class HChat {
 	#links = [];
 	#trackingId;
 
+	/** @param {HPacket} packet */
 	constructor(packet) {
 		if (!(packet instanceof HPacket)) {
 			throw new Error(
 				"HEntity.constructor: packet must be an instance of HPacket"
 			);
 		}
+
+		const readIndex = packet.readIndex
+		packet.resetReadIndex()
 
 		this.#userId = packet.readInteger();
 		this.#text = packet.readString();
@@ -27,6 +31,8 @@ export default class HChat {
 		}
 
 		this.#trackingId = packet.readInteger();
+
+		packet.readIndex = readIndex
 	}
 
 	get userId() {

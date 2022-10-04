@@ -1,14 +1,30 @@
-import { HPacket } from "gnode-api";
+import { HFloorItem, HPacket, HWallItem } from "gnode-api";
+import GetGuestRoomResult from "../parsers/in_GetGuestRoomResult.js";
+import UserObject from "../parsers/in_UserObject.js";
 
 /**
  * @typedef SnapshotSummary
  * @property {number} timestamp
  * @property {String} host
+ * @property {Object} visitor
+ * @property {Number} visitor.id
+ * @property {String} visitor.name
+ * @property {String} visitor.figureString
+ * @property {Object} room
+ * @property {Number} room.id
+ * @property {String} room.name
+ * @property {Boolean} room.hasGroup
+ * @property {Object} owner
+ * @property {Number} owner.id
+ * @property {String} owner.name
+ * @property {String} owner.figureString
  */
 
 export default class SnapshotComposer {
 	/** @type {HPacket} */
 	in_GetGuestRoomResult;
+	/** @type {HPacket} */
+	in_UserObject;
 	/** @type {HPacket} */
 	in_Objects;
 	/** @type {HPacket} */
@@ -39,7 +55,7 @@ export default class SnapshotComposer {
 	}
 
 	get ready() {
-		return !!(this.in_GetGuestRoomResult && this.in_Objects && this.in_Items)
+		return !!(this.in_GetGuestRoomResult && this.in_UserObject && this.in_Objects && this.in_Items)
 	}
 
 	/**
@@ -52,10 +68,48 @@ export default class SnapshotComposer {
 		const timestamp = this.#timestamp || Date.now()
 		this.#timestamp = timestamp
 
+		const roomData = new GetGuestRoomResult(this.in_GetGuestRoomResult)
+		const userData = new UserObject(this.in_UserObject)
+
+		let readIndex = this.in_Objects.readIndex;
+		this.in_Objects.resetReadIndex()
+		const objectsData = HFloorItem.parse(this.in_Objects)
+		this.in_Objects.readIndex = readIndex
+		readIndex = this.in_Items.readIndex;
+		this.in_Items.resetReadIndex()
+		const itemsData = HWallItem.parse(this.in_Items)
+		this.in_Items.readIndex = readIndex
+
+		// Not the best way to filter teleports, but kinda work (you can now reconnect it to other one)
+		const teleportCount = objectsData.filter(x => x.id === x.extra - 1 || x.id === x.extra + 1).length
+
 		return {
 			timestamp,
 			host: this.#host,
-			// TODO: parse packets and extract important summary, eg visitor info (name, id, figure), room info (name, owner, ids), furni info (floor, wall, teleports), ...
+			visitor: {
+				id: userData.id,
+				name: userData.name,
+				figureString: userData.figure,
+				// figureImage: '', // TODO: fetch the current image and store as base64
+			},
+			room: {
+				id: roomData.roomData.flatId,
+				name: roomData.roomData.roomName,
+				hasGroup: !!roomData.roomData.groupId,
+				// picture: '', // TODO: fetch the current image and store as base64
+				// tilesCount: 0, // TODO: get from {in:FloorHeightMap}
+			},
+			owner: {
+				id: roomData.roomData.ownerId,
+				name: roomData.roomData.ownerName,
+				figureString: '', // TODO: fetch from API
+				// figureImage: '', // TODO: fetch the current image and store as base64
+			},
+			furni: {
+				floorCount: objectsData.length,
+				wallCount: itemsData.length,
+				teleportCount,
+			},
 		}
 	}
 
@@ -66,6 +120,18 @@ export default class SnapshotComposer {
 	#serializeSummary(response, summary) {
 		response.appendLong(summary.timestamp)
 		response.appendString(summary.host)
+
+		response.appendInt(summary.visitor.id)
+		response.appendString(summary.visitor.name)
+		response.appendString(summary.visitor.figureString)
+
+		response.appendInt(summary.room.id)
+		response.appendString(summary.room.name)
+		response.appendBoolean(summary.room.hasGroup)
+
+		response.appendInt(summary.owner.id)
+		response.appendString(summary.owner.name)
+		response.appendString(summary.owner.figureString)
 
 		// TODO: parse packets and extract important summary (eg room name, owner name, total furni count, teleports count, ...)
 	}

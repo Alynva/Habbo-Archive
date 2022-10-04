@@ -5,6 +5,7 @@ import { Extension, HPacket, HDirection } from 'gnode-api'
 import GetGuestRoomResult from '../parsers/in_GetGuestRoomResult.js'
 import Waiter from '../utils/Waiter.js'
 import SnapshotComposer from '../composers/SnapshotComposer.js'
+import UserObject from '../parsers/in_UserObject.js'
 
 const extensionInfo = {
 	name: "Habbo Archive",
@@ -34,6 +35,7 @@ export default class GEarthConnection extends EventEmitter {
 			this.#ext.writeToConsole(`Host detected: ${host}`)
 			this.#habboHost = host
 			this.#habboConnected = true
+			this.#snapshot = new SnapshotComposer(this.#habboHost)
 			this.emit('habboConnection', true)
 		})
 
@@ -57,7 +59,16 @@ export default class GEarthConnection extends EventEmitter {
 				return
 			}
 
+			this.#ext.sendToServer(new HPacket("{out:InfoRetrieve}"))
+
 			this.#snapshot.in_GetGuestRoomResult = packet
+			this.#checkSnapshotReady()
+		})
+
+		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "UserObject", hMessage => {
+			const packet = hMessage.getPacket()
+
+			this.#snapshot.in_UserObject = packet
 			this.#checkSnapshotReady()
 		})
 
