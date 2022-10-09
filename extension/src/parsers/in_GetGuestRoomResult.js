@@ -295,24 +295,29 @@ export default class GetGuestRoomResult {
 	}
 
 	/** @param {HPacket} packet */
-	constructor(packet) {
+	constructor(packet, resetReadIndex = true) {
 		if (!(packet instanceof HPacket)) {
 			throw new Error("GetGuestRoomResult.constructor: packet must be an instance of HPacket")
 		}
 
-		const readIndex = packet.readIndex;
-		packet.resetReadIndex()
+		let readIndex
+		if (resetReadIndex) {
+			readIndex = packet.readIndex;
+			packet.resetReadIndex()
+		}
 
 		this.enterRoom = packet.readBoolean()
-		this.roomData = new RoomData(packet)
+		this.roomData = new RoomData(packet, resetReadIndex)
 		;[this.roomForward, this.staffPick, this.isGroupMember] = packet.read("BBB")
 		const allInRoomMuted = packet.readBoolean()
-		this.moderationSettings = new ModerationSettings(packet)
+		this.moderationSettings = new ModerationSettings(packet, resetReadIndex)
 		this.roomData.allInRoomMuted = allInRoomMuted
 		this.roomData.canMute = packet.readBoolean()
-		this.chatSettings = new ChatSettings(packet)
+		this.chatSettings = new ChatSettings(packet, resetReadIndex)
 
-		packet.readIndex = readIndex
+		if (resetReadIndex) {
+			packet.readIndex = readIndex
+		}
 	}
 
 }

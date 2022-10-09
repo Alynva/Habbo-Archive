@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src",
-    "dev": "nodemon src -p 9092"
+    "dev": "nodemon src -p 9092",
+    "generate": "node src/generateGraph.js"
   },
   "author": "",
   "license": "ISC",

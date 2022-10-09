@@ -36,13 +36,16 @@ export default class UserObject {
 	accountSafetyLocked
 
 	/** @param {HPacket} packet */
-	constructor(packet) {
+	constructor(packet, resetReadIndex = true) {
 		if (!(packet instanceof HPacket)) {
 			throw new Error("GetGuestRoomResult.constructor: packet must be an instance of HPacket");
 		}
 
-		const readIndex = packet.readIndex;
-		packet.resetReadIndex()
+		let readIndex
+		if (resetReadIndex) {
+			readIndex = packet.readIndex;
+			packet.resetReadIndex()
+		}
 
 		;[
 			this.id, this.name, this.figure, this.sex, this.customData,
@@ -52,7 +55,9 @@ export default class UserObject {
 			this.nameChangeAllowed, this.accountSafetyLocked
 		] = packet.read('iSSSSSBiiiBSBB');
 
-		packet.readIndex = readIndex
+		if (resetReadIndex) {
+			packet.readIndex = readIndex
+		}
 	}
 
 	[util.inspect.custom](depth) {
