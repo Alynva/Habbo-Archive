@@ -44,44 +44,29 @@ export default class GEarthConnection extends EventEmitter {
 			this.emit('gearthConnection', false)
 		})
 
-		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "GetGuestRoomResult", hMessage => {
-			const packet = hMessage.getPacket()
-			const packetData = new GetGuestRoomResult(packet)
-
-
-			if (!packetData.enterRoom) {
-				this.#snapshot = new Snapshot()
-				return
-			}
-
+		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "OpenConnection", hMessage => {
+			this.#snapshot = new Snapshot()
+			
 			this.#ext.sendToServer(new HPacket("{out:InfoRetrieve}"))
-
-			this.#snapshot.rawPackets.in_GetGuestRoomResult = packet
-			this.#checkSnapshotReady()
 		})
 
-		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "UserObject", hMessage => {
-			const packet = hMessage.getPacket()
-
-			this.#snapshot.rawPackets.in_UserObject = packet
-			this.#checkSnapshotReady()
-		})
-
-		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Objects", hMessage => {
-			const packet = hMessage.getPacket()
-
-			this.#snapshot.rawPackets.in_Objects = packet
-			this.#checkSnapshotReady()
-		})
-
-		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "Items", hMessage => {
-			const packet = hMessage.getPacket()
-
-			this.#snapshot.rawPackets.in_Items = packet
-			this.#checkSnapshotReady()
-		})
+		this.#interceptPackets()
 
 		this.#ext.run()
+	}
+
+	#interceptPackets() {
+		const packets = ["RoomReady", "RoomEntryTile", "FloorHeightMap", "Users", "Objects", "Items", "GetGuestRoomResult", "UserObject"]
+
+		for (const packetName of packets) {
+			this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, packetName, hMessage => {
+				const packet = hMessage.getPacket()
+
+				// TODO: for "in_Users", the list should be appended
+				this.#snapshot.rawPackets['in_' + packetName] = packet
+				this.#checkSnapshotReady()
+			})
+		}
 	}
 
 	async #checkSnapshotReady() {
