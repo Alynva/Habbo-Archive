@@ -45,7 +45,7 @@ export default class GEarthConnection extends EventEmitter {
 		})
 
 		this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, "OpenConnection", hMessage => {
-			this.#snapshot = new Snapshot()
+			// this.#snapshot = new Snapshot()
 			
 			this.#ext.sendToServer(new HPacket("{out:InfoRetrieve}"))
 		})
@@ -60,9 +60,13 @@ export default class GEarthConnection extends EventEmitter {
 
 		for (const packetName of packets) {
 			this.#ext.interceptByNameOrHash(HDirection.TOCLIENT, packetName, hMessage => {
+				if (packetName === 'RoomReady') this.#ext.sendToServer(new HPacket("{out:InfoRetrieve}"))
+
 				const packet = hMessage.getPacket()
 
-				// TODO: for "in_Users", the list should be appended
+				if (!this.#snapshot) this.#snapshot = new Snapshot()
+
+				// TODO: for "in_Users", the list should be appended and filtered to only bots and pets
 				this.#snapshot.rawPackets['in_' + packetName] = packet
 				this.#checkSnapshotReady()
 			})
@@ -70,7 +74,8 @@ export default class GEarthConnection extends EventEmitter {
 	}
 
 	async #checkSnapshotReady() {
-		if (this.#snapshot.ready) {
+		if (this.#snapshot.ready && !this.#snapshot.locked) {
+			this.#snapshot.locked = true
 			const snapshotPacket = await this.#snapshot.compose()
 			const summary = await this.#snapshot.getSummary()
 
@@ -79,12 +84,16 @@ export default class GEarthConnection extends EventEmitter {
 				snapshotPacket,
 			}
 
-			fs.writeFileSync(`./snapshots/${summary.timestamp}.json`, JSON.stringify({
+			fs.writeFileSync(`../snapshots/v${Snapshot.version}/${summary.timestamp}.json`, JSON.stringify({
 				summary,
 				data: Array.from(snapshotPacket.toBytes()),
 			}))
 
 			this.emit("snapshotReady", snapshotData)
+
+			this.#snapshot = new Snapshot()
+
+			this.roomNotifiedAlert()
 		}
 	}
 

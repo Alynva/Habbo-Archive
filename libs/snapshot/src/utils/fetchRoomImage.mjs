@@ -7,9 +7,10 @@ const DEFAULT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABuCAIAAABJO
 export default function fetchRoomImage(roomId, hotelId = "us") {
 	return fetch(`https://habbo-stories-content.s3.amazonaws.com/navigator-thumbnail/hh${hotelId}/${roomId}.png`)
 		.then(async r => {
-			if (!r.headers.get("content-type").toLowerCase().startsWith("image/")) return DEFAULT
+			const contentType = r.headers.get("content-type").toLowerCase()
+			if (!contentType.startsWith("image/")) return DEFAULT
 
 			const b = await r.arrayBuffer()
-			return `data:${r.headers.get("content-type")};base64,${Buffer.from(b).toString("base64")}`;
+			return `data:${contentType};base64,${Buffer.from(b).toString("base64")}`;
 		})
 }

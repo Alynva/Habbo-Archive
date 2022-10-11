@@ -7,9 +7,10 @@ const DEFAULT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAfCAYAAAD5h
 export default function fetchAvatarImage(userName, domain = "www.habbo.com") {
 	return fetch(`https://${domain}/habbo-imaging/avatarimage?user=${userName}&headonly=1&size=b&gesture=sml&direction=2&head_direction=2&action=std`)
 		.then(async r => {
-			if (!r.headers.get("content-type").toLowerCase().startsWith("image/")) return DEFAULT
+			const contentType = r.headers.get("content-type").toLowerCase()
+			if (!contentType.startsWith("image/")) return DEFAULT
 
 			const b = await r.arrayBuffer()
-			return `data:${r.headers.get("content-type")};base64,${Buffer.from(b).toString("base64")}`;
+			return `data:${contentType};base64,${Buffer.from(b).toString("base64")}`;
 		})
 }

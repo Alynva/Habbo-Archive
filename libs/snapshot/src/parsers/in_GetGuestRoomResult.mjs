@@ -307,13 +307,13 @@ export default class GetGuestRoomResult {
 		}
 
 		this.enterRoom = packet.readBoolean()
-		this.roomData = new RoomData(packet, resetReadIndex)
+		this.roomData = new RoomData(packet)
 		;[this.roomForward, this.staffPick, this.isGroupMember] = packet.read("BBB")
 		const allInRoomMuted = packet.readBoolean()
-		this.moderationSettings = new ModerationSettings(packet, resetReadIndex)
+		this.moderationSettings = new ModerationSettings(packet)
 		this.roomData.allInRoomMuted = allInRoomMuted
 		this.roomData.canMute = packet.readBoolean()
-		this.chatSettings = new ChatSettings(packet, resetReadIndex)
+		this.chatSettings = new ChatSettings(packet)
 
 		if (resetReadIndex) {
 			packet.readIndex = readIndex

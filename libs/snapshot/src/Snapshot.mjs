@@ -1,7 +1,8 @@
-import { HFloorItem, HPacket, HWallItem } from "gnode-api";
+import { HPacket, HWallItem } from "gnode-api";
 
 import GetGuestRoomResult from "./parsers/in_GetGuestRoomResult.mjs";
 import UserObject from "./parsers/in_UserObject.mjs";
+import { HFloorItem } from "./parsers/in_Objects.mjs";
 import fetchAvatarImage from "./utils/fetchAvatarImage.mjs";
 import fetchFurniData from "./utils/fetchFurniData.mjs";
 import fetchRoomImage from "./utils/fetchRoomImage.mjs";
@@ -54,6 +55,8 @@ const HOTEL_IDS = {
 	"game-br.habbo.com": "br",
 }
 
+const bytes2hex = bytes => Array.from(bytes).map(i => ('0'+i.toString(16)).slice(-2)).join(' ')
+
 export default class Snapshot {
 	/** @type {{floorFurni: Map<number, FurniType>, wallFurni: Map<number, FurniType>}} */
 	static #FURNI_DATA = null
@@ -69,6 +72,100 @@ export default class Snapshot {
 		if (!domain) throw new Error("Unknown host, unable to map it to the API domain.")
 
 		Snapshot.#FURNI_DATA = await fetchFurniData(domain)
+	}
+
+	/** @param {HPacket} packet */
+	static parse(packet) {
+		const dumbPacket = new HPacket(packet.toBytes())
+
+		/** @type {SnapshotSummary} */
+		const summary = {
+			version: dumbPacket.readInteger(),
+			timestamp: dumbPacket.readLong(),
+			host: dumbPacket.readString(),
+			visitor: {
+				id: dumbPacket.readLong(),
+				name: dumbPacket.readString(),
+				figure: {
+					string: dumbPacket.readString(),
+					image: dumbPacket.readString(),
+				},
+			},
+			room: {
+				id: dumbPacket.readLong(),
+				name: dumbPacket.readString(),
+				hasGroup: dumbPacket.readBoolean(),
+				image: dumbPacket.readString(),
+			},
+			owner: {
+				id: dumbPacket.readLong(),
+				name: dumbPacket.readString(),
+				figure: {
+					string: dumbPacket.readString(),
+					image: dumbPacket.readString(),
+				},
+			},
+			furni: {
+				floorCount: dumbPacket.readInteger(),
+				wallCount: dumbPacket.readInteger(),
+				ownersCount: dumbPacket.readInteger(),
+				teleportCount: dumbPacket.readInteger(),
+			},
+		}
+
+		const data = {}
+
+		while (true) {
+			const packetName = dumbPacket.readString()
+			const packetSize = dumbPacket.readInteger()
+
+			if (Snapshot.requiredPackets.includes(packetName)) {
+				const packetParser = Snapshot.#parsers[packetName]
+
+				if (!packetParser) {
+					dumbPacket.readIndex += packetSize
+					continue
+				}
+
+				data[packetName] = packetParser(dumbPacket, false)
+			} else if (packetName === 'APIData') {
+				// TODO: add APIData parser
+				dumbPacket.readIndex += packetSize
+				break;
+			} else {
+				break;
+			}
+		}
+
+		return { summary, data }
+	}
+		
+	static get version() { return 3 }
+
+	static get headerId() { return 32_767 }
+
+	static get requiredPackets() {
+		return [
+			"in_RoomReady",
+			"in_RoomEntryTile",
+			"in_FloorHeightMap",
+			"in_Users",
+			"in_Objects",
+			"in_Items",
+			"in_GetGuestRoomResult",
+			"in_UserObject"
+		]
+	}
+
+	static get #parsers() {
+		/** @type {{ [direction_identifier: String]: (packet: HPacket) => any }} */
+		const map = {
+			'in_GetGuestRoomResult': (p, ...args) => new GetGuestRoomResult(p, ...args),
+			'in_UserObject': (p, ...args) => new UserObject(p, ...args),
+			'in_Objects': HFloorItem.parse,
+			'in_Items': HWallItem.parse,
+		}
+		return map
 	}
 
 	/**
@@ -105,6 +202,8 @@ export default class Snapshot {
 	#ownersCount = 0
 	#teleportCount = 0
 
+	locked = false
+
 	constructor() {
 		if (!Snapshot.#FURNI_DATA) {
 			throw new Error("Furni data not loaded! Call `Snapshot.loadFurniData(host)` first.")
@@ -113,21 +212,8 @@ export default class Snapshot {
 		this.#timestamp = Date.now()
 	}
 
-	get version() { return 1 }
-
-	get headerId() { return 32_767 }
-
-	get requiredPackets() {
-		return [
-			"in_GetGuestRoomResult",
-			"in_UserObject",
-			"in_Objects",
-			"in_Items",
-		]
-	}
-
 	get ready() {
-		return this.requiredPackets
+		return Snapshot.requiredPackets
 			.every(p => this.rawPackets[p])
 	}
 
@@ -145,24 +231,15 @@ export default class Snapshot {
 		return data
 	}
 
-	get #parsers() {
-		/** @type {{ [direction_identifier: String]: (packet: HPacket) => any }} */
-		const map = {
-			'in_GetGuestRoomResult': p => new GetGuestRoomResult(p),
-			'in_UserObject': p => new UserObject(p),
-			'in_Objects': HFloorItem.parse,
-			'in_Items': HWallItem.parse,
-		}
-		return map
-	}
-
 	async parseRawPackets() {
 		this.apiData.avatarImages = {}
 		this.#ownersCount = 0
 
 		for (const packetName in this.rawPackets) {
 			const packet = this.rawPackets[packetName]
-			const parser = this.#parsers[packetName]
+			const parser = Snapshot.#parsers[packetName]
+
+			if (!parser) continue
 
 			this.parsedPackets[packetName] = this.#parsePacket(packet, parser)
 
@@ -186,7 +263,7 @@ export default class Snapshot {
 				if (!this.apiData.avatarImages[visitor.id]) {
 					const visitorImage = await fetchAvatarImage(visitor.name, DOMAINS[Snapshot.#host])
 					this.apiData.avatarImages[visitor.id] = {
-						string: '', // TODO: fetch profile
+						string: visitor.figure,
 						image: visitorImage,
 					}
 				}
@@ -207,6 +284,7 @@ export default class Snapshot {
 					image: ownerImage,
 				}
 
+				// TODO: fix this counter, the in_GetGuestRoomResult is received first, and fill the room owner image before its furnis are loaded
 				this.#ownersCount++
 			}
 
@@ -246,32 +324,37 @@ export default class Snapshot {
 
 	async getSummary(allowIncomplete = false) {
 		if (!allowIncomplete && !this.ready)
-			throw new Error("Please, set all packets before using the summary.")
+			throw new Error("Please, set all packets before using the summary. Missing Packets: " + Snapshot.requiredPackets.filter(p => !this.rawPackets[p]))
 
 		await this.parseRawPackets()
 
 		/** @type {SnapshotSummary} */
 		const summary = {
+			version: Snapshot.version,
 			timestamp: this.#timestamp,
 			host: Snapshot.#host,
 			visitor: {
 				id: this.parsedPackets.in_UserObject.id,
 				name: this.parsedPackets.in_UserObject.name,
-				figureString: this.parsedPackets.in_UserObject.figure,
-				figureImage: this.parsedPackets.in_UserObject.figureImage,
+				figure: {
+					string: this.parsedPackets.in_UserObject.figure,
+					image: this.apiData.avatarImages[this.parsedPackets.in_UserObject.id].image,
+				},
 			},
 			room: {
 				id: this.parsedPackets.in_GetGuestRoomResult.roomData.flatId,
 				name: this.parsedPackets.in_GetGuestRoomResult.roomData.roomName,
 				hasGroup: !!this.parsedPackets.in_GetGuestRoomResult.roomData.groupId,
 				image: this.apiData.roomImage,
-				// tilesCount: 0, // TODO: get from {in:FloorHeightMap}
+				// tilesCount: 0, // TODO: parse from rawPackets.in_FloorHeightMap
 			},
 			owner: {
 				id: this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId,
 				name: this.parsedPackets.in_GetGuestRoomResult.roomData.ownerName,
-				figureString: this.apiData.avatarImages[this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId].string,
-				figureImage: this.apiData.avatarImages[this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId].image,
+				figure: {
+					string: this.apiData.avatarImages[this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId].string,
+					image: this.apiData.avatarImages[this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId].image,
+				},
 			},
 			furni: {
 				floorCount: this.parsedPackets.in_Objects.length,
@@ -328,45 +411,15 @@ export default class Snapshot {
 							this.#serializeObject(response, elem)
 						}
 					} else {
-						this.#serializeObject(object[prop])
+						this.#serializeObject(response, object[prop])
 					}
 					break
 			
 				default:
-					throw new Error("Object has invalid prop value.")
+					throw new Error("Object has invalid prop value `" + typeof object[prop] + "` in `" + prop + "`")
 			}
 		}
 	}
-
-	/**
-	 * @param {HPacket} response
-	 * @param {SnapshotSummary} summary
-	 */
-	// #serializeSummary(response, summary) {
-	// 	this.#serializeObject(summary)
-	// 	response.appendLong(summary.timestamp)
-	// 	response.appendString(summary.host)
-
-	// 	response.appendInt(summary.visitor.id)
-	// 	response.appendString(summary.visitor.name)
-	// 	response.appendString(summary.visitor.figureString)
-	// 	response.appendLongString(summary.visitor.figureImage)
-
-	// 	response.appendInt(summary.room.id)
-	// 	response.appendString(summary.room.name)
-	// 	response.appendBoolean(summary.room.hasGroup)
-	// 	response.appendLongString(summary.room.image)
-
-	// 	response.appendInt(summary.owner.id)
-	// 	response.appendString(summary.owner.name)
-	// 	response.appendString(summary.owner.figureString)
-	// 	response.appendLongString(summary.owner.figureImage)
-
-	// 	response.appendInt(summary.furni.floorCount)
-	// 	response.appendInt(summary.furni.wallCount)
-	// 	response.appendInt(summary.furni.ownersCount)
-	// 	response.appendInt(summary.furni.teleportCount)
-	// }
 
 	/**
 	 * @param {HPacket} response
@@ -381,6 +434,7 @@ export default class Snapshot {
 		const data = packet.readBytes(packet.getBytesLength() - 6)
 		packet.readIndex = readIndex
 	
+		response.appendInt(data.length)
 		response.appendBytes(data)
 	}
 
@@ -391,30 +445,35 @@ export default class Snapshot {
 	#serializeApiData(response, apiData) {
 		response.appendString("APIData")
 
-		response.appendInt(Object.keys(apiData.avatarImages).length)
+		const tempPacket = new HPacket(0)
+
+		tempPacket.appendInt(Object.keys(apiData.avatarImages).length)
 
 		for (const avatarId in apiData.avatarImages) {
-			response.appendString(apiData.avatarImages[avatarId].string)
-			response.appendLongString(apiData.avatarImages[avatarId].image)
+			tempPacket.appendString(apiData.avatarImages[avatarId].string)
+			tempPacket.appendLongString(apiData.avatarImages[avatarId].image)
 		}
 
-		response.appendInt(Object.keys(apiData.furniData.floorTypes).length)
+		tempPacket.appendInt(Object.keys(apiData.furniData.floorTypes).length)
 
 		for (const classname in apiData.furniData.floorTypes) {
 			const data = apiData.furniData.floorTypes[classname]
-			this.#serializeObject(response, data)
+			this.#serializeObject(tempPacket, data)
 		}
 
-		response.appendInt(Object.keys(apiData.furniData.wallTypes).length)
+		tempPacket.appendInt(Object.keys(apiData.furniData.wallTypes).length)
 
 		for (const classname in apiData.furniData.wallTypes) {
 			const data = apiData.furniData.wallTypes[classname]
-			this.#serializeObject(response, data)
+			this.#serializeObject(tempPacket, data)
 		}
+
+		response.appendInt(tempPacket.getBytesLength())
+		response.appendBytes(tempPacket.toBytes())
 	}
 
 	async compose(allowIncomplete = false) {
-		const response = new HPacket(this.headerId)
+		const response = new HPacket(Snapshot.headerId)
 
 		if (!allowIncomplete && !this.ready)
 			throw new Error("Please, set all packets before composing.")

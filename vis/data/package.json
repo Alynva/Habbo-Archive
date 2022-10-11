@@ -4,12 +4,13 @@
   "description": "",
   "main": "generateGraph.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node generateGraph.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "gnode-api": "^0.2.12"
+    "gnode-api": "^0.2.12",
+    "habbo-archive-snapshot": "file:../../libs/snapshot"
   }
 }

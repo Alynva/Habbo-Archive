@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { HPacket } from 'gnode-api'
-import Snapshot from '../../extension/src/parsers/xx_Snapshot.js'
+import Snapshot from 'habbo-archive-snapshot'
 
 const furniData = await fetch(`https://www.habbo.com.br/gamedata/furnidata_json/1`)
 	.then(r => r.json())
@@ -30,13 +30,13 @@ const furniData = await fetch(`https://www.habbo.com.br/gamedata/furnidata_json/
 		return { floorFurni }
 	})
 
-const snapshotsNames = fs.readdirSync('../../extension/snapshots')
+const snapshotsNames = fs.readdirSync('../../snapshots/v'+Snapshot.version)
 	.filter(n => n.endsWith(".json"))
 
 const snapshots = new Map()
 
 for (const snapshotName of snapshotsNames) {
-	const snapshotString = fs.readFileSync('../../extension/snapshots/' + snapshotName, 'utf-8')
+	const snapshotString = fs.readFileSync('../../snapshots/v'+Snapshot.version+'/' + snapshotName, 'utf-8')
 	const snapshot = JSON.parse(snapshotString)
 	if (!snapshot?.summary?.room?.id) continue
 
@@ -53,29 +53,22 @@ for (const [roomId, snapshot] of snapshots) {
 	const { _, data } = snapshot
 	const bytes = new Uint8Array(data)
 	const snapshotPacket = new HPacket(bytes)
-	const snapshotData = new Snapshot(snapshotPacket)
-	console.log(snapshotData.in_Objects.length)
-	for (const furni of snapshotData.in_Objects) {
-		// if (furniData.floorFurni.get(furni.typeId).furniline === "buildersclub") {
-		// 	// console.log("buildersclub", furni)
-		// }
+	const { summary, data: snapshotData } = Snapshot.parse(snapshotPacket)
 
-		// if (furni.id === 2147418192) {
-		// 	console.log(furni)
-		// 	if (found) process.exit()
-		// 	found = true
-		// }
+	for (const furni of snapshotData.in_Objects) {
+
 		const typeId = furni.typeId
 		const classname = furniData.floorFurni.get(typeId).classname
 		const destination = furniData.floorFurni.get(typeId).category === 'teleport' ? furni.extra : undefined
 		result.push({
 			// id: `floor_${furni.id}`,
-			furniId: furni.id,
+			// TODO: deal with duplicated furni (yes, it exists) in a better way
+			furniId: result.find(x => x.furniId === furni.id) ? furni.id * -1 - roomId : furni.id,
 			destination: destination,
 			name: classname,
 			bc: furni.id >= 2147418112,
 			image: furniImages[furni] || furniImages._default,
-			host: snapshotData.summary.host,
+			host: summary.host,
 			roomId: roomId,
 			roomImage: `https://habbo-stories-content.s3.amazonaws.com/navigator-thumbnail/hhbr/${roomId}.png`,
 			roomOwnerId: snapshotData.in_GetGuestRoomResult.roomData.ownerId,

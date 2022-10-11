@@ -55,6 +55,10 @@ export default class UserObject {
 			this.nameChangeAllowed, this.accountSafetyLocked
 		] = packet.read('iSSSSSBiiiBSBB');
 
+		// Warning: idk why, but this packet has 3 trailing bytes in the end. It could be booleans, or a empty string. They are not present in the SWF parser.
+
+		packet.readIndex += 3
+
 		if (resetReadIndex) {
 			packet.readIndex = readIndex
 		}
