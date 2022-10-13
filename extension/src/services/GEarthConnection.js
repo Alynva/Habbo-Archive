@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import path from 'node:path'
 import { EventEmitter } from 'node:events'
 
 import { Extension, HPacket, HDirection } from 'gnode-api'
@@ -76,20 +76,11 @@ export default class GEarthConnection extends EventEmitter {
 	async #checkSnapshotReady() {
 		if (this.#snapshot.ready && !this.#snapshot.locked) {
 			this.#snapshot.locked = true
-			const snapshotPacket = await this.#snapshot.compose()
-			const summary = await this.#snapshot.getSummary()
 
-			const snapshotData = {
-				roomSummary: summary,
-				snapshotPacket,
-			}
+			const folderPath = path.join(process.cwd(), '..', 'snapshots', 'v' + Snapshot.version)
+			await this.#snapshot.saveToFile(folderPath)
 
-			fs.writeFileSync(`../snapshots/v${Snapshot.version}/${summary.timestamp}.json`, JSON.stringify({
-				summary,
-				data: Array.from(snapshotPacket.toBytes()),
-			}))
-
-			this.emit("snapshotReady", snapshotData)
+			this.emit("snapshotReady", this.#snapshot.id)
 
 			this.#snapshot = new Snapshot()
 

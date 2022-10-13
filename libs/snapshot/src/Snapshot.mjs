@@ -1,3 +1,6 @@
+import path from "node:path"
+import fs from 'node:fs'
+
 import { HPacket, HWallItem } from "gnode-api";
 
 import GetGuestRoomResult from "./parsers/in_GetGuestRoomResult.mjs";
@@ -6,6 +9,7 @@ import { HFloorItem } from "./parsers/in_Objects.mjs";
 import fetchAvatarImage from "./utils/fetchAvatarImage.mjs";
 import fetchFurniData from "./utils/fetchFurniData.mjs";
 import fetchRoomImage from "./utils/fetchRoomImage.mjs";
+import { EPOCH, HOSTS, joinSnowflake } from "./utils/snowflake.mjs";
 
 /**
  * @typedef SnapshotSummary
@@ -204,6 +208,9 @@ export default class Snapshot {
 
 	locked = false
 
+	/** @type {string} */
+	#snowflake
+
 	constructor() {
 		if (!Snapshot.#FURNI_DATA) {
 			throw new Error("Furni data not loaded! Call `Snapshot.loadFurniData(host)` first.")
@@ -215,6 +222,12 @@ export default class Snapshot {
 	get ready() {
 		return Snapshot.requiredPackets
 			.every(p => this.rawPackets[p])
+	}
+
+	get id() {
+		if (!this.#snowflake) throw new Error("Summary must be generated first.")
+
+		return this.#snowflake
 	}
 
 	/**
@@ -364,6 +377,14 @@ export default class Snapshot {
 			},
 		}
 
+		this.#snowflake = joinSnowflake([
+			this.#timestamp - EPOCH,
+			HOSTS[Snapshot.#host],
+			this.parsedPackets.in_GetGuestRoomResult.roomData.flatId,
+			this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId,
+			this.parsedPackets.in_UserObject.id,
+		])
+
 		return summary
 	}
 
@@ -489,5 +510,16 @@ export default class Snapshot {
 		this.#serializeApiData(response, this.apiData)
 
 		return response
+	}
+
+	async saveToFile(folderPath) {
+		const snapshotPacket = await this.compose()
+		const summary = await this.getSummary()
+
+		const filePath = path.join(folderPath, `${this.id}.json`)
+		fs.writeFileSync(filePath, JSON.stringify({
+			summary,
+			data: Array.from(snapshotPacket.toBytes()),
+		}))
 	}
 }
