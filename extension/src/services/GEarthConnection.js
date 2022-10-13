@@ -87,6 +87,8 @@ export default class GEarthConnection extends EventEmitter {
 		if (this.#snapshot.ready && !this.#snapshot.locked) {
 			this.#snapshot.locked = true
 
+			this.#ext.sendToClient(new HPacket("{in:Chat}{i:-1}{s:\"Creating snapshot...\"}{i:0}{i:30}{i:0}{i:-1}"))
+
 			const folderPath = path.join(process.cwd(), '..', 'snapshots', 'v' + Snapshot.version)
 			await this.#snapshot.saveToFile(folderPath)
 

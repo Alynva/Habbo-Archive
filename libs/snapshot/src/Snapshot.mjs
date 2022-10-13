@@ -10,6 +10,7 @@ import fetchAvatarImage from "./utils/fetchAvatarImage.mjs";
 import fetchFurniData from "./utils/fetchFurniData.mjs";
 import fetchRoomImage from "./utils/fetchRoomImage.mjs";
 import { EPOCH, HOSTS, joinSnowflake } from "./utils/snowflake.mjs";
+import FloorHeightMap from "./parsers/in_FloorHeightMap.mjs";
 
 /**
  * @typedef SnapshotSummary
@@ -164,21 +165,23 @@ export default class Snapshot {
 	static get #parsers() {
 		/** @type {{ [direction_identifier: String]: (packet: HPacket) => any }} */
 		const map = {
-			'in_GetGuestRoomResult': (p, ...args) => new GetGuestRoomResult(p, ...args),
-			'in_UserObject': (p, ...args) => new UserObject(p, ...args),
+			'in_FloorHeightMap': (p, ...args) => new FloorHeightMap(p, ...args),
 			'in_Users': HEntity.parse,
 			'in_Objects': HFloorItem.parse,
 			'in_Items': HWallItem.parse,
+			'in_GetGuestRoomResult': (p, ...args) => new GetGuestRoomResult(p, ...args),
+			'in_UserObject': (p, ...args) => new UserObject(p, ...args),
 		}
 		return map
 	}
 
 	/**
 	 * @typedef ParsedPackets
-	 * @property {GetGuestRoomResult} in_GetGuestRoomResult
-	 * @property {UserObject} in_UserObject
+	 * @property {FloorHeightMap} in_FloorHeightMap
 	 * @property {HFloorItem[]} in_Objects
 	 * @property {HWallItem[]} in_Items
+	 * @property {GetGuestRoomResult} in_GetGuestRoomResult
+	 * @property {UserObject} in_UserObject
 	 */
 
 	/**
@@ -266,10 +269,6 @@ export default class Snapshot {
 			if (!parser) continue
 
 			this.parsedPackets[packetName] = this.#parsePacket(packet, parser)
-
-			if (packetName === 'in_Users') {
-				console.log(this.parsedPackets[packetName])
-			}
 
 			if (packetName === 'in_GetGuestRoomResult') {
 				const room = this.parsedPackets.in_GetGuestRoomResult.roomData
@@ -373,7 +372,7 @@ export default class Snapshot {
 				name: this.parsedPackets.in_GetGuestRoomResult.roomData.roomName,
 				hasGroup: !!this.parsedPackets.in_GetGuestRoomResult.roomData.groupId,
 				image: this.apiData.roomImage,
-				// tilesCount: 0, // TODO: parse from rawPackets.in_FloorHeightMap
+				tilesCount: this.parsedPackets.in_FloorHeightMap.tilesCount,
 			},
 			owner: {
 				id: this.parsedPackets.in_GetGuestRoomResult.roomData.ownerId,
