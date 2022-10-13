@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 
-import { Extension, HPacket, HDirection } from 'gnode-api'
+import { Extension, HPacket, HDirection, HEntity } from 'gnode-api'
 import GetGuestRoomResult from '../parsers/in_GetGuestRoomResult.js'
 import Snapshot from 'habbo-archive-snapshot'
 
@@ -66,8 +66,18 @@ export default class GEarthConnection extends EventEmitter {
 
 				if (!this.#snapshot) this.#snapshot = new Snapshot()
 
-				// TODO: for "in_Users", the list should be appended and filtered to only bots and pets
-				this.#snapshot.rawPackets['in_' + packetName] = packet
+				if (packetName === 'Users' && this.#snapshot.rawPackets['in_' + packetName]) {
+					// Append more users to the already stored packets
+
+					const dumbPacket = new HPacket(this.#snapshot.rawPackets['in_' + packetName].toBytes())
+					const users = HEntity.parse(packet)
+					for (const user of users) {
+						user.appendToPacket(dumbPacket)
+					}
+					this.#snapshot.rawPackets['in_' + packetName] = dumbPacket
+				} else {
+					this.#snapshot.rawPackets['in_' + packetName] = packet
+				}
 				this.#checkSnapshotReady()
 			})
 		}

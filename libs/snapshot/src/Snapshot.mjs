@@ -1,7 +1,7 @@
 import path from "node:path"
 import fs from 'node:fs'
 
-import { HPacket, HWallItem } from "gnode-api";
+import { HEntity, HEntityType, HPacket, HWallItem } from "gnode-api";
 
 import GetGuestRoomResult from "./parsers/in_GetGuestRoomResult.mjs";
 import UserObject from "./parsers/in_UserObject.mjs";
@@ -144,7 +144,7 @@ export default class Snapshot {
 		return { summary, data }
 	}
 		
-	static get version() { return 3 }
+	static get version() { return 4 }
 
 	static get headerId() { return 32_767 }
 
@@ -166,6 +166,7 @@ export default class Snapshot {
 		const map = {
 			'in_GetGuestRoomResult': (p, ...args) => new GetGuestRoomResult(p, ...args),
 			'in_UserObject': (p, ...args) => new UserObject(p, ...args),
+			'in_Users': HEntity.parse,
 			'in_Objects': HFloorItem.parse,
 			'in_Items': HWallItem.parse,
 		}
@@ -244,6 +245,15 @@ export default class Snapshot {
 		return data
 	}
 
+	/** @param {HPacket} packet */
+	static #filterUserType(packet) {
+		const dumbPacket = new HPacket(packet.toBytes())
+		const entities = HEntity.parse(dumbPacket)
+		const notUsers = entities.filter(e => e.entityType !== HEntityType.HABBO)
+		const result = HEntity.constructPacket(notUsers, packet.headerId())
+		return result
+	}
+
 	async parseRawPackets() {
 		this.apiData.avatarImages = {}
 		this.#ownersCount = 0
@@ -255,6 +265,10 @@ export default class Snapshot {
 			if (!parser) continue
 
 			this.parsedPackets[packetName] = this.#parsePacket(packet, parser)
+
+			if (packetName === 'in_Users') {
+				console.log(this.parsedPackets[packetName])
+			}
 
 			if (packetName === 'in_GetGuestRoomResult') {
 				const room = this.parsedPackets.in_GetGuestRoomResult.roomData
@@ -502,6 +516,10 @@ export default class Snapshot {
 		this.#serializeObject(response, await this.getSummary(allowIncomplete))
 
 		for (const packetName in this.rawPackets) {
+			if (packetName === 'in_Users') {
+				this.rawPackets[packetName] = Snapshot.#filterUserType(this.rawPackets[packetName])
+			}
+
 			const packet = this.rawPackets[packetName]
 			
 			this.#serializePacket(response, packetName, packet)
