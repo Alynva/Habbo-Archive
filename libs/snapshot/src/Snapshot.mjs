@@ -204,7 +204,8 @@ export default class Snapshot {
 	/** @type {number} */
 	#timestamp
 
-	#ownersCount = 0
+	/** @type {Map<string, boolean>} */
+	#furniOwners = new Map()
 	#teleportCount = 0
 
 	locked = false
@@ -256,7 +257,7 @@ export default class Snapshot {
 
 	async parseRawPackets() {
 		this.apiData.avatarImages = {}
-		this.#ownersCount = 0
+		this.#furniOwners = new Map()
 
 		for (const packetName in this.rawPackets) {
 			const packet = this.rawPackets[packetName]
@@ -310,10 +311,9 @@ export default class Snapshot {
 					string: '', // TODO: fetch profile
 					image: ownerImage,
 				}
-
-				// TODO: fix this counter, the in_GetGuestRoomResult is received first, and fill the room owner image before its furnis are loaded
-				this.#ownersCount++
 			}
+
+			this.#furniOwners.set(floorFurni.ownerId, true)
 
 			const data = Snapshot.#FURNI_DATA.floorFurni.get(floorFurni.typeId)
 
@@ -337,9 +337,9 @@ export default class Snapshot {
 					string: '', // TODO: fetch profile
 					image: ownerImage,
 				}
-
-				this.#ownersCount++
 			}
+
+			this.#furniOwners.set(floorFurni.ownerId, true)
 
 			const data = Snapshot.#FURNI_DATA.wallFurni.get(floorFurni.typeId)
 
@@ -386,7 +386,7 @@ export default class Snapshot {
 			furni: {
 				floorCount: this.parsedPackets.in_Objects.length,
 				wallCount: this.parsedPackets.in_Items.length,
-				ownersCount: this.#ownersCount,
+				ownersCount: this.#furniOwners.size,
 				teleportCount: this.#teleportCount,
 			},
 		}
