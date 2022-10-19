@@ -10,10 +10,10 @@ export default function fetchFurniData(domain = "www.habbo.com") {
 				wallitemtypes: { furnitype: wallitemtypes },
 			} = data
 
-			/** @type {Map<number, FurniType>} */
+			/** @type {Map<number, import("../Snapshot.mjs").FurniType>} */
 			const floorFurni = roomitemtypes
 				.reduce((prev, cur) => prev.set(cur.id, cur), new Map())
-			/** @type {Map<number, FurniType>} */
+			/** @type {Map<number, import("../Snapshot.mjs").FurniType>} */
 			const wallFurni = wallitemtypes
 				.reduce((prev, cur) => prev.set(cur.id, cur), new Map())
 

@@ -62,6 +62,16 @@ const HOTEL_IDS = {
 
 const bytes2hex = bytes => Array.from(bytes).map(i => ('0'+i.toString(16)).slice(-2)).join(' ')
 
+// TODO: scrap custom furni data:
+// - post-it: `{out:GetItemData}{i:${id}}` and `{in:ItemDataUpdate}{s:"263556783"}{s:"${color} ${text}"}`
+// - gifts: already included in `{in:Objects}`
+// - CDs: songId already included in `{in:Objects}`, but for more data can use `{out:GetSongInfo}{i:${amount}}{i:${ids[i]}}` and `{in:TraxSongInfo}{i:1}{i:${id}}{s:"${offerId?}"}{s:"${title}"}{s:"${data}"}{i:${length}}{s:"${author}"}`
+// - jukeboxes: impossible, only `{out:GetNowPlaying}` and `{in:NowPlaying}{i:${currentSongId}}{i:${currentPosition}}{i:${nextSongId}}{i:${nextPosition}}{i:${syncCount}}`
+// - trophies: already included in `{in:Objects}`
+//
+// and API data:
+// - furni image: `https://images.habbo.com/dcr/hof_furni/${revision}/${classname}_icon.png`
+
 export default class Snapshot {
 	/** @type {{floorFurni: Map<number, FurniType>, wallFurni: Map<number, FurniType>}} */
 	static #FURNI_DATA = null
